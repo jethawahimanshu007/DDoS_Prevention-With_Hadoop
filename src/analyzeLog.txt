@@ -1,0 +1,39 @@
+IP_ADDRESS=10.106.31.99
+rm -rf localhost_access_log*
+endTimestamp=$(date +'%d/%b/%Y %H:%M:%S -%4N')
+startTimestamp=$(date --date='-60 seconds' +'%d/%b/%Y %H:%M:%S -%4N')  
+
+rm -rf localhost_log_dir
+echo "endtime--" $endTimestamp
+echo "starttime--" $startTimestamp
+
+lftp -u admin,admin -e "mget localhost_access_log*;bye" $IP_ADDRESS
+
+rm -rf localhost_log_dir 
+mkdir localhost_log_dir
+mv localhost_access_log*  localhost_log_dir
+cd localhost_log_dir
+localhost_log=$(ls -lrth localhost_acces* | tail -1| awk -F ' ' '{print $9}')
+mv $localhost_log localhost-Log
+
+
+echo "Copying log file to hadoop for input"
+
+hadoop fs -rm -r -f /user/training/input/localhost-Log
+hadoop fs -copyFromLocal localhost-Log /user/training/input/
+hadoop fs -rm -r -f /user/training/outputNS
+
+cd ..
+echo "Starting hadoop analysis at time `date`"
+hadoop jar hadoopNS.jar LogAnalyze /user/training/outputNS "$startTimestamp---$endTimestamp" 1000
+echo 'ended hadoop'
+
+echo "Hadoop output is::"
+cat outputNS/part-r-00000
+
+cat outputNS/part-r-00000 | awk -F '\t' '{print $1}' > blockIps.txt
+
+echo "Culprit IP addresses are:"
+cat blockIps.txt
+
+
